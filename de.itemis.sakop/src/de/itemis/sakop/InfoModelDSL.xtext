@@ -1,0 +1,142 @@
+grammar de.itemis.sakop.InfoModelDSL with org.eclipse.xtext.common.Terminals
+
+generate infoModelDSL "http://www.itemis.de/sakop/InfoModelDSL"
+
+import "http://www.eclipse.org/emf/2002/Ecore" as ecore
+//import "http://www.eclipse.org/xtext/xbase/Xbase"
+
+Model:
+	imports+=Import* 
+	namespace=Namespace;
+
+Import:
+	'import' importedNamespace=QualifiedNameWithWildcard;
+
+AbstractElement:
+	InformationModel | Endpoint | MappingModel;
+
+/* Information Model */
+
+InformationModel:
+	'Model' name=ID ('extends' superModel=[InformationModel])? '{'
+		parts+=Area*
+	'}';
+
+Area:
+	Controller | Line;
+
+Controller:
+	'Controller' name=ID ('partof' super=[Controller])? '{'
+		subsystems+=[Endpoint|QualifiedName]*
+	'}';
+
+Line:
+	'Line' name=ID ('partof' super=[Line])? '{'
+		endpoints+=[Endpoint|QualifiedName]*
+	'}';
+
+/* Data Model */
+
+Endpoint:
+	EndPointInformation
+	'Endpoint' name=ID '{' messages+=Message* '}';
+
+Namespace:
+	'namespace' name = QualifiedName	 
+	element=AbstractElement
+;
+
+fragment EndPointInformation:
+	('manufacturer' manufacturer = STRING)?
+	('category' category = Category)?
+	('version' version = VERSION)?
+	('lastupdate' update = Date)?
+	('description' description=STRING)?;
+	
+
+Message:
+	'Message' name=ID ('as' type=MessageType)? '{'
+		elements+=DataItem*
+	'}';
+
+DataItem:
+	DataItemSimplex | DataItemComplex;
+
+DataItemSimplex returns DataItem:
+	type=ExtendedDatatype name=ID (hasRestrictions?='{' restrictions+=Restriction+ '}')?;
+	
+Restriction:
+	{RMin} 'min' ':' value=Number |
+	{RMax} 'max' ':' value=Number |
+	{RLength} 'length' ':' value=INT |
+	{RUnit} 'unit' ':' value=STRING |
+	{RKeyType} 'keyType' ':' value=ExtendedDatatype |
+	{RValueType} 'valueType' ':' value=ExtendedDatatype;
+	
+DataItemComplex returns DataItem:
+	'Complex' name=ID '{'
+		subItems+=DataItem+
+	'}';
+	
+/* Mapping Model */
+	
+MappingModel:
+	'Mapping' name=ID 'using' infoModel=[InformationModel|QualifiedName] '(' source=[Endpoint|QualifiedName] 'to' target=[Endpoint|QualifiedName] ')' '{'
+		messages+=MappingMessage+
+	'}';
+	
+MappingMessage:
+	'Message' source=[Message|QualifiedName] 'to' target=[Message|QualifiedName] ('as' targetType=MessageType)? '{'
+		elements+=MappingItem*
+	'}';
+	
+MappingItem:
+	source=[DataItem|QualifiedName] 'to' target=[DataItem|QualifiedName];
+
+/* Additional Rules */
+
+QualifiedName: ID ('.' ID)*;
+
+QualifiedNameWithWildcard:
+	QualifiedName '.*'?;
+
+Category: ID ('/' ID)*;
+
+terminal BOOLEAN returns ecore::EBoolean: "true" | "false";
+
+terminal VERSION: ('0'..'9')* '.' ('0'..'9')* '.' ('0'..'9')*('-'ID)?;
+
+Date:
+	y=INT'-'m=INT'-'d=INT ('T'h=INT':'mi=INT (':'s=INT)?)?;
+	
+enum MessageType:
+	report = 'Report' |
+	instruction = 'Instruction' |
+	alarm = 'Alarm' |
+	warning = 'Warning' |
+	misc = 'Misc';
+
+enum ExtendedDatatype:
+	date = 'Date' |
+	list = 'List' |
+	keyvaluelist = 'KeyValueList' |
+	text = 'Text' |
+	boolean = 'boolean' |
+	double = "double" |
+	float = "float" |
+	real = "real" |
+	byte = 'byte' |
+	u_int = 'u_integer' |
+	int = 'integer' |
+	u_long = 'u_long' |
+	long = 'long' |
+	binary = 'binary';
+
+Number:	UINT | UDOUBLE;
+
+UINT: '-'? INT;
+
+DOUBLE: '-'? UDOUBLE;
+
+UDOUBLE returns ecore::EDouble:
+	INT '.' INT;
